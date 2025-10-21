@@ -30,41 +30,26 @@ def write_project_files(folder_name):
 
 <?
 for postprocess in keys['postprocess']:
-    keys['postprocess'] = postprocess.to_jcm()
+    keys['postprocess_'] = postprocess.to_jcm()
     ?>
 
-    %(postprocess)s
+    %(postprocess_)s
     """
     write_file(folder_name, "project.jcmpt", project_content)
 
     # --- sources.jcmt ---
     source_content = """
+SourceBag {
 <?
-for i, source in enumerate(keys['source']):
-  keys['lam'] = source.lam
-  keys['pol'] = source.polarization
-  keys['angle_of_incidence'] = source.angle_of_incidence
-  keys['phi'] = source.phi
-  keys['incidence'] = source.incidence
+for source in keys['source']:
+  keys['source_'] = source.to_jcm()
   ?>
-  SourceBag {
 
-  Source {
-
-      ElectricFieldStrength {
-        PlaneWave {
-          Lambda0 = %(lam)e
-          SP = %(pol)e 
-          ThetaPhi = [%(angle_of_incidence)e, %(phi)e]
-          3DTo2D = yes
-          Incidence = %(incidence)s
-        }
-      }
-                      <?
-  ?>
-    }
-  }
-"""
+  %(source_)s
+  <?
+?>
+}
+    """
     write_file(folder_name, "sources.jcmt", source_content)
 
     # --- layout.jcm ---

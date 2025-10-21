@@ -193,20 +193,10 @@ class Source:
     Methods:
     • polarization_label(): returns 'S', 'P', or 'Mixed or custom'
     • describe(): narrates all physical parameters in ceremonial format
-
-    Example:
-        src = Source(
-            lam=532,
-            polarization=[1, 0],
-            angle_of_incidence=45,
-            phi=0,
-            incidence='FromAbove',
-            unit='nm'
-        )
-        print(src.describe())
+    • to_jcm(): emits structured simulation-ready block format
     """
 
-    def __init__(self, lam, polarization, angle_of_incidence, phi, incidence='FromAbove', unit='nm',type = 'PlaneWave'):
+    def __init__(self, lam, polarization, angle_of_incidence, phi, incidence='FromAbove', unit='nm', type='PlaneWave',PowerFluxScaling=None):
         allowed = {'FromAbove', 'FromBelow'}
         if incidence not in allowed:
             raise ValueError(f"incidence must be one of {allowed}, got '{incidence}'")
@@ -215,9 +205,9 @@ class Source:
             raise ValueError("polarization must be a list of two numbers")
 
         if unit == 'nm':
-            self.lam = lam*1e-9
+            self.lam = lam * 1e-9
         elif unit == 'eV':
-            self.lam = eVnm_converter(lam)*1e-9
+            self.lam = eVnm_converter(lam) * 1e-9
         elif unit == 'm':
             self.lam = lam
         else:
@@ -228,6 +218,7 @@ class Source:
         self.phi = phi
         self.incidence = incidence
         self.type = type
+        self.PowerFluxScaling = PowerFluxScaling
 
     def polarization_label(self):
         if self.polarization == [1, 0]:
@@ -245,7 +236,28 @@ class Source:
         lines.append(f"• Azimuthal angle (phi) (deg): {self.phi}°")
         lines.append(f"• Incidence direction: {self.incidence}")
         lines.append(f"• Type: {self.type}")
+        if self.PowerFluxScaling is not None:
+            lines.append(f"• PowerFluxScaling: {self.PowerFluxScaling}")
         return "\n".join(lines)
+
+    def to_jcm(self):
+        block = f"""Source {{
+    ElectricFieldStrength {{
+        {self.type} {{
+        Lambda0 = {self.lam}
+        SP = [{self.polarization[0]} {self.polarization[1]}]
+        ThetaPhi = [{self.angle_of_incidence}, {self.phi}]
+        3DTo2D = yes
+        Incidence = {self.incidence}"""
+        
+        if self.PowerFluxScaling is not None:
+            block += f"\n      PowerFluxScaling = {self.PowerFluxScaling}"
+
+        block += f"""
+        }}
+    }}
+    }}"""
+        return block
     
 
 class Cartesian:
@@ -346,6 +358,7 @@ class PostProcess:
         elif mode == "FourierTransform":
             self.normal_direction = kwargs.get("normal_direction")
             self.rotation = kwargs.get("rotation")
+            self.numerical_aperture = kwargs.get("numerical_aperture")
 
     def describe(self):
         lines = [f"🌀 PostProcess description:"]
@@ -388,7 +401,8 @@ class PostProcess:
                 lines.append(f"{pad}    NormalDirection = {self.normal_direction}")
             if self.rotation:
                 lines.append(f"{pad}    Rotation = {self.rotation}")
-
+            if self.numerical_aperture:
+                lines.append(f"{pad}    NumericalAperture = {self.numerical_aperture}")
         lines.append(f"{pad}  }}")
         lines.append(f"{pad}}}")
         return "\n".join(lines)
@@ -535,6 +549,9 @@ class FourierCoefficients:
             "Kx_in": np.full(n_orders, Kx_in),
             "Ky_in": np.full(n_orders, Ky_in),
             "Kz_in": np.full(n_orders, Kz_in),
+            "amp_x": amp_x,
+            "amp_y": amp_y,
+            "amp_z": amp_z,
             "Intensity_calc": intensity
         })
 
