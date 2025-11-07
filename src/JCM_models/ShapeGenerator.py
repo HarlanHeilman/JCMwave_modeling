@@ -199,21 +199,21 @@ class ShapeGenerator:
         ]
     
 
-    def plot(self, ax=None, title=None):
+    def plot(self, ax=None, title=None, shift_x=0, shift_y=0):
         coords = self.generate()
         x, y = zip(*coords)
         if ax is None:
             fig  = plt.figure(figsize=(6, 6))
-            plt.plot(x, y, marker='o', linestyle='-', color='teal')
-            plt.fill(x, y, alpha=0.3, color='skyblue')
+            plt.plot(x+shift_x, y+shift_y, marker='o', linestyle='-', color='teal')
+            plt.fill(x+shift_x, y+shift_y, alpha=0.3, color='skyblue')
             plt.title(title or f"{self.shape_type.capitalize()} Shape")
             plt.axis('equal')
             plt.grid(True)
             plt.show()
             return fig
         else:
-            ax.plot(x, y, marker='o', linestyle='-', color='teal')
-            ax.fill(x, y, alpha=0.3, color='skyblue')
+            ax.plot(x+shift_x, y+shift_y, marker='o', linestyle='-', color='teal')
+            ax.fill(x+shift_x, y+shift_y, alpha=0.3, color='skyblue')
             return ax
 
 

@@ -39,16 +39,13 @@ for postprocess in keys['postprocess']:
 
     # --- sources.jcmt ---
     source_content = """
-SourceBag {
 <?
 for source in keys['source']:
   keys['source_'] = source.to_jcm()
   ?>
 
   %(source_)s
-  <?
-?>
-}
+
     """
     write_file(folder_name, "sources.jcmt", source_content)
 

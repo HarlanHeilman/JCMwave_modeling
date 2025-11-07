@@ -81,9 +81,9 @@ class Shape:
   Refractive Index (nk): {self.nk}
   Permittivity (ε): {self.permittivity}
 """
-    def plot(self, ax=None, **kwargs):
-        x = self.points[::2]
-        y = self.points[1::2]
+    def plot(self, ax=None, shift_x=0,shift_y=0 , **kwargs):
+        x = self.points[::2]+shift_x
+        y = self.points[1::2]+shift_y
         x = np.append(x, x[0])  # Close the polygon
         y = np.append(y, y[0])
         if ax is None:
@@ -98,8 +98,10 @@ class Shape:
             ax.plot(x, y, label=self.name, **kwargs)
             return ax
         
-    def plot_colored_geometry(self, ax=None, **kwargs):
+    def plot_colored_geometry(self, ax=None, shift_x=0, shift_y=0, **kwargs):
         points = np.asarray(self.points).reshape(-1, 2)
+        points[:, 0] += shift_x
+        points[:, 1] += shift_y
         polygon = Polygon(
             points,
             closed=True,
@@ -241,7 +243,9 @@ class Source:
         return "\n".join(lines)
 
     def to_jcm(self):
-        block = f"""Source {{
+        block = f"""
+    SourceBag {{
+    Source {{
     ElectricFieldStrength {{
         {self.type} {{
         Lambda0 = {self.lam}
@@ -256,7 +260,9 @@ class Source:
         block += f"""
         }}
     }}
-    }}"""
+    }}
+    }}
+    """
         return block
     
 
@@ -528,47 +534,54 @@ class FourierCoefficients:
         }
     
     def to_dataframe(self):
-        K = self.data["K"]
-        E = self.data["ElectricFieldStrength"][0]
+        dfs = []
 
-        Kx, Ky, Kz = K[:, 0], K[:, 1], K[:, 2]
-        k_in = self.header["IncomingPlaneWaveKVector"][0]
-        Kx_in, Ky_in, Kz_in = k_in[0], k_in[1], k_in[2]
+        for key in self.data["ElectricFieldStrength"]:
+            E = self.data["ElectricFieldStrength"][key]
+            k_in = self.header["IncomingPlaneWaveKVector"][key]
 
-        amp_x, amp_y, amp_z = E[:, 0], E[:, 1], E[:, 2]
-        intensity = (amp_x.conj() * amp_x).real + \
-                    (amp_y.conj() * amp_y).real + \
-                    (amp_z.conj() * amp_z).real
+            K = self.data["K"]
+            Kx, Ky, Kz = K[:, 0], K[:, 1], K[:, 2]
+            Kx_in, Ky_in, Kz_in = k_in[0], k_in[1], k_in[2]
 
-        n_orders = len(K)
+            amp_x, amp_y, amp_z = E[:, 0], E[:, 1], E[:, 2]
+            intensity = (amp_x.conj() * amp_x).real + \
+                        (amp_y.conj() * amp_y).real + \
+                        (amp_z.conj() * amp_z).real
 
-        df = pd.DataFrame({
-            "Kx": Kx,
-            "Ky": Ky,
-            "Kz": Kz,
-            "Kx_in": np.full(n_orders, Kx_in),
-            "Ky_in": np.full(n_orders, Ky_in),
-            "Kz_in": np.full(n_orders, Kz_in),
-            "amp_x": amp_x,
-            "amp_y": amp_y,
-            "amp_z": amp_z,
-            "Intensity_calc": intensity
-        })
+            n_orders = len(K)
 
-        if "N1" in self.data and self.data["N1"] is not None:
-            df["order"] = self.data["N1"]
+            df = pd.DataFrame({
+                "key": np.full(n_orders, key),
+                "Kx": Kx,
+                "Ky": Ky,
+                "Kz": Kz,
+                "Kx_in": np.full(n_orders, Kx_in),
+                "Ky_in": np.full(n_orders, Ky_in),
+                "Kz_in": np.full(n_orders, Kz_in),
+                "amp_x": amp_x,
+                "amp_y": amp_y,
+                "amp_z": amp_z,
+                "Intensity_calc": intensity
+            })
 
-        df["k_norm"] = df.apply(lambda row: np.linalg.norm([row["Kx_in"], row["Ky_in"], row["Kz_in"]]), axis=1)
-        df["cos_theta_in"] = df["Kz_in"] / df["k_norm"]
-        df["cos_theta_out"] = df["Kz"] / df["k_norm"]
+            if "N1" in self.data and self.data["N1"] is not None:
+                df["order"] = self.data["N1"]
 
-        with np.errstate(invalid='ignore', divide='ignore'):
-            df["cos_phi_out"] = np.sqrt(1 - np.square(np.abs(df["Kx"] - df["Kx_in"]) / df["k_norm"]))
-            df["Intensity_calc_corrected"] = (
-                df["Intensity_calc"] * df["cos_theta_out"] / df["cos_theta_in"] * df["cos_phi_out"]
-            )
+            df["k_norm"] = df.apply(lambda row: np.linalg.norm([row["Kx_in"], row["Ky_in"], row["Kz_in"]]), axis=1)
+            df["cos_theta_in"] = df["Kz_in"] / df["k_norm"]
+            df["cos_theta_out"] = df["Kz"] / df["k_norm"]
 
-        return df
+            with np.errstate(invalid='ignore', divide='ignore'):
+                df["cos_phi_out"] = np.sqrt(1 - np.square(np.abs(df["Kx"] - df["Kx_in"]) / df["k_norm"]))
+                df["Intensity_calc_corrected"] = (
+                    df["Intensity_calc"] * df["cos_theta_out"] / df["cos_theta_in"] * df["cos_phi_out"]
+                )
+
+            dfs.append(df)
+
+        return pd.concat(dfs, ignore_index=True)
+
 
 
 
