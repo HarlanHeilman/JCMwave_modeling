@@ -67,7 +67,7 @@ class Shape:
         self.domain_id = domain_id
         self.priority = priority
         self.side_length_constraint = side_length_constraint
-        self.points = points
+        self.points = np.array([float(p) for p in points])
         self.nk = nk
         self.boundary = boundary
 
@@ -479,6 +479,22 @@ class FieldData:
         ax.set_aspect("equal")
         plt.tight_layout()
         return fig, ax
+    def to_dataframe(self, index=0, log=False):
+        """Export field data to a Pandas DataFrame."""
+        intensity = self.intensity(index)
+        values = np.log(intensity) if log else intensity
+
+        df = pd.DataFrame({
+            "X": self.X.flatten(),
+            "Y": self.Y.flatten(),
+            "Z": self.Z.flatten(),
+            "Intensity": values.flatten()
+        })
+        # Add header metadata as extra columns if desired
+        for k, v in self.header.items():
+            df[k] = v
+        return df
+
 
 
 class FourierCoefficients:
