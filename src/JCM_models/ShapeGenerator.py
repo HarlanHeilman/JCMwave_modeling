@@ -95,8 +95,9 @@ class ShapeGenerator:
         heights = self.params.get('height')
         widths = self.params.get('width')  # length must be len(heights) + 1
 
-        if not (isinstance(heights, list) and isinstance(widths, list)):
-            raise ValueError("'height' and 'width' must be lists")
+        if not (isinstance(heights, (list, np.ndarray)) and isinstance(widths, (list, np.ndarray))):
+            raise ValueError("'height' and 'width' must be lists or numpy arrays")
+
         if len(widths) != len(heights) + 1:
             raise ValueError("Length of 'width' must be one more than 'height'")
 

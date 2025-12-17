@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 import pandas as pd
+import pickle
 import json
 from typing import Any, Dict, List, Optional
 from .utils import eVnm_converter
@@ -450,7 +451,7 @@ class FieldData:
         amplitude = self.field[index]  # shape (Nx, Ny, 3)
         return (amplitude.conj() * amplitude).sum(2).real
 
-    def plot_field(self, index=0, log=True, cmap="viridis", scale=1e9):
+    def plot_field(self, index=0, log=True, cmap="viridis", scale=1e9, ax=None):
         """
         Plot the field intensity on the XY grid.
 
@@ -459,11 +460,17 @@ class FieldData:
         • log: whether to plot log(intensity)
         • cmap: matplotlib colormap
         • scale: scaling factor for axes (default 1e9 → nm)
+        • ax: optional matplotlib axis to plot into. If None, a new figure/axis is created.
         """
         intensity = self.intensity(index)
         Z = np.log(intensity) if log else intensity
 
-        fig, ax = plt.subplots(1, 1, figsize=(8, 5))
+        # Create new fig/ax if none provided
+        created_fig = None
+        if ax is None:
+            fig, ax = plt.subplots(1, 1, figsize=(8, 5))
+            created_fig = fig
+
         mesh = ax.pcolormesh(
             self.X * scale,
             self.Y * scale,
@@ -473,12 +480,17 @@ class FieldData:
         )
         cbar = plt.colorbar(mesh, ax=ax)
         cbar.set_label("log(Intensity)" if log else "Intensity")
-        ax.set_xlabel(f"X [{ 'nm' if scale==1e9 else 'm'} ]")
-        ax.set_ylabel(f"Y [{ 'nm' if scale==1e9 else 'm'} ]")
+        ax.set_xlabel(f"X [{'nm' if scale==1e9 else 'm'}]")
+        ax.set_ylabel(f"Y [{'nm' if scale==1e9 else 'm'}]")
         ax.set_title(f"Field intensity ({self.header.get('QuantityType')})")
         ax.set_aspect("equal")
-        plt.tight_layout()
-        return fig, ax
+
+        if created_fig is not None:
+            plt.tight_layout()
+            return created_fig, ax
+        else:
+            return ax
+
     def to_dataframe(self, index=0, log=False):
         """Export field data to a Pandas DataFrame."""
         intensity = self.intensity(index)
@@ -494,6 +506,29 @@ class FieldData:
         for k, v in self.header.items():
             df[k] = v
         return df
+    
+    def save(self, filename):
+        """Save FieldData to a .npz file with header pickled."""
+        np.savez_compressed(
+            filename,
+            field=self.field,
+            grid=self.grid,
+            X=self.X,
+            Y=self.Y,
+            Z=self.Z,
+            header=pickle.dumps(self.header)
+        )
+
+    @classmethod
+    def load(cls, filename):
+        """Load FieldData from a .npz file."""
+        data = np.load(filename, allow_pickle=True)
+        field = data["field"]
+        grid = data["grid"]
+        X, Y, Z = data["X"], data["Y"], data["Z"]
+        header = pickle.loads(data["header"].item())
+        return cls(field, grid, X, Y, Z, header)
+
 
 
 
@@ -552,21 +587,50 @@ class FourierCoefficients:
     def to_dataframe(self):
         dfs = []
 
+        # Precompute constants
+        eps0 = 8.85418781762039e-12
+        mu0  = 1.25663706143592e-06
+
+        eps = np.real(self.header["RelPermittivity"] * eps0)
+        mu  = np.real(self.header["RelPermeability"] * mu0)
+
+        # Determine factor depending on field type
+        field_type = "ElectricFieldStrength"
+        factor = 0.5 * np.sqrt(eps / mu)
+
         for key in self.data["ElectricFieldStrength"]:
-            E = self.data["ElectricFieldStrength"][key]
+
+            # --- Extract fields ---
+            E = self.data["ElectricFieldStrength"][key]      # shape (N, 3)
+            K = self.data["K"]                               # shape (N, 3)
             k_in = self.header["IncomingPlaneWaveKVector"][key]
 
-            K = self.data["K"]
             Kx, Ky, Kz = K[:, 0], K[:, 1], K[:, 2]
             Kx_in, Ky_in, Kz_in = k_in[0], k_in[1], k_in[2]
 
             amp_x, amp_y, amp_z = E[:, 0], E[:, 1], E[:, 2]
-            intensity = (amp_x.conj() * amp_x).real + \
-                        (amp_y.conj() * amp_y).real + \
-                        (amp_z.conj() * amp_z).real
+
+            # --- Intensity ---
+            intensity = (
+                (amp_x.conj() * amp_x).real +
+                (amp_y.conj() * amp_y).real +
+                (amp_z.conj() * amp_z).real
+            )
 
             n_orders = len(K)
 
+            # --- Compute power flux (your convert2powerflux logic) ---
+            k_norm = np.linalg.norm(K, axis=1)  # |k|
+            nfield = np.sum(np.abs(E)**2, axis=1) / k_norm
+            kron = np.kron(np.ones((3,1)), nfield).T   # shape (N, 3)
+            power_flux_vec = factor * kron * K         # shape (N, 3)
+
+            # Components of power flux
+            P_x = power_flux_vec[:, 0]
+            P_y = power_flux_vec[:, 1]
+            P_z = power_flux_vec[:, 2]
+
+            # --- Build dataframe ---
             df = pd.DataFrame({
                 "key": np.full(n_orders, key),
                 "Kx": Kx,
@@ -575,29 +639,40 @@ class FourierCoefficients:
                 "Kx_in": np.full(n_orders, Kx_in),
                 "Ky_in": np.full(n_orders, Ky_in),
                 "Kz_in": np.full(n_orders, Kz_in),
-                "amp_x": amp_x,
-                "amp_y": amp_y,
-                "amp_z": amp_z,
-                "Intensity_calc": intensity
+                "amp_x": (amp_x.conj() * amp_x).real,
+                "amp_y": (amp_y.conj() * amp_y).real,
+                "amp_z": (amp_z.conj() * amp_z).real,
+                "Intensity_calc": intensity,
+                "P_x": P_x,
+                "P_y": P_y,
+                "P_z": P_z,
+                "P_norm": P_x + P_y + P_z
             })
 
+            # Add diffraction order if available
             if "N1" in self.data and self.data["N1"] is not None:
                 df["order"] = self.data["N1"]
 
-            df["k_norm"] = df.apply(lambda row: np.linalg.norm([row["Kx_in"], row["Ky_in"], row["Kz_in"]]), axis=1)
+            # --- Angular corrections ---
+            df["k_norm"] = np.linalg.norm([Kx_in, Ky_in, Kz_in])
             df["cos_theta_in"] = df["Kz_in"] / df["k_norm"]
             df["cos_theta_out"] = df["Kz"] / df["k_norm"]
 
             with np.errstate(invalid='ignore', divide='ignore'):
-                df["cos_phi_out"] = np.sqrt(1 - np.square(np.abs(df["Kx"] - df["Kx_in"]) / df["k_norm"]))
+                df["cos_phi_out"] = np.sqrt(
+                    1 - np.square(np.abs(df["Kx"] - df["Kx_in"]) / df["k_norm"])
+                )
                 df["Intensity_calc_corrected"] = (
-                    df["Intensity_calc"] * df["cos_theta_out"] / df["cos_theta_in"] * df["cos_phi_out"]
+                    df["Intensity_calc"]
+                    * df["cos_theta_out"]
+                    / df["cos_theta_in"]
+                    * df["cos_phi_out"]
                 )
 
             dfs.append(df)
 
         return pd.concat(dfs, ignore_index=True)
-
+    
 
 
 
