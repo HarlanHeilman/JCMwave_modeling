@@ -1,12 +1,9 @@
 
-SourceBag {
 <?
 for source in keys['source']:
   keys['source_'] = source.to_jcm()
   ?>
 
   %(source_)s
-  <?
-?>
-}
+
     

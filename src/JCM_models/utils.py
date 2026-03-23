@@ -3,7 +3,7 @@ import numpy as np
 #import numba
 import pandas as pd
 from scipy.interpolate import interp1d
-
+import math
 # Precompute hc in nm·eV
 hc = const.h * const.c / const.e * 1e9  # Planck × speed of light / charge × 1e9
 
@@ -89,6 +89,87 @@ def circle_line_intersection(center, radius, p_start, p_end):
 
     return [pt for pt in [pt1, pt2] if on_segment(pt)]
 
+def tangent_point(P, B, C0, r):
+    """
+    Compute tangent point on segment PB where the rounding circle (center C0, radius r)
+    touches the segment.
+    P = A or C
+    B = corner point
+    C0 = circle center
+    r = radius
+    """
+    P = np.array(P, float)
+    B = np.array(B, float)
+    C0 = np.array(C0, float)
+
+    # Direction from B to P
+    v = P - B
+    v_len = np.linalg.norm(v)
+    v_unit = v / v_len
+
+    # Project center onto the line from B toward P
+    # t is distance from B to projection
+    t = np.dot(C0 - B, v_unit)
+
+    # Tangent point is projection minus radius along the direction
+    T = B + v_unit * t
+
+    # Move T toward B so distance to center is exactly r
+    # (normalize vector from center to T)
+    dir_CT = T - C0
+    dir_CT /= np.linalg.norm(dir_CT)
+    T = C0 + dir_CT * r
+
+    return T
+
+def arc_points(C0, T1, T2, r, n=32):
+    """
+    Generate n points along the arc from T1 to T2 around center C0.
+    """
+    C0 = np.array(C0, float)
+    T1 = np.array(T1, float)
+    T2 = np.array(T2, float)
+
+    ang1 = math.atan2(T1[1] - C0[1], T1[0] - C0[0])
+    ang2 = math.atan2(T2[1] - C0[1], T2[0] - C0[0])
+
+    # Ensure shortest direction
+    if ang2 < ang1:
+        ang2 += 2 * math.pi
+
+    angles = np.linspace(ang1, ang2, n)
+    arc = np.column_stack([
+        C0[0] + r * np.cos(angles),
+        C0[1] + r * np.sin(angles)
+    ])
+    return arc
+
+def point_in_poly(x, y, poly):
+    """
+    Returns True if (x, y) is inside polygon poly.
+    poly = list of (x, y)
+    """
+    inside = False
+    n = len(poly)
+    px, py = x, y
+
+    for i in range(n):
+        x1, y1 = poly[i]
+        x2, y2 = poly[(i + 1) % n]
+
+        # Check if point is between y1 and y2
+        if ((y1 > py) != (y2 > py)):
+            # Compute x coordinate of intersection with ray
+            x_int = x1 + (py - y1) * (x2 - x1) / (y2 - y1)
+            if px < x_int:
+                inside = not inside
+
+    return inside
+
+def inside_y_range(x, y, poly):
+    ys = [p[1] for p in poly]
+    return min(ys) <= y <= max(ys)
+
 def corner_round(x1, x2, x3, r, n=50):
     """
     Calculates the x and y points of a rounded corner
@@ -124,38 +205,37 @@ def corner_round(x1, x2, x3, r, n=50):
     # normded vector a and b
     norm_a = a / norme_a
     norm_b = b / norme_b
+    #print(norm_a, norm_b)
     # angles between a and b
     ang = np.arccos(np.dot(a, b) / norme_a / norme_b)
     #print(np.rad2deg(ang))
     # angle of the a vector to the x-axis, needed as an offset
-    ang_0 = np.arccos(a[0] / norme_a)
+    #ang_0 = np.arccos(a[0] / norme_a)
     #print(np.rad2deg(ang_0))
     # angular apertur of the corner
-    beta2 = np.pi - ang
+    #beta2 = np.pi - ang
     # distance between x2 and the center of the circle of the corner and x2
     c = -r / np.sin(ang / 2)
+    #print(c)
     # vector pointing along the line between the center of the circle of the corner and x2
     direct = (norm_a + norm_b) / np.linalg.norm(norm_a + norm_b)
     # calculating the x and y of the center of the circle
     c_point = x2 + c * direct
 
-    # look in wich part of the circle the corner need to be
-    if direct[0] > 0 and direct[1] > 0:
-        rot = -1
-    elif direct[0] < 0 and direct[1] < 0:
-        rot = 0
-    elif direct[0] < 0 and direct[1] > 0:
-        rot = -1
-    else:
-        rot = 2
+    T1 = tangent_point(x1, x2, c_point, r)
+    T2 = tangent_point(x3, x2, c_point, r)
+
+    if a[0] * b[1] - a[1] * b[0] > 0:
+        arc = arc_points(c_point, T2, T1, r, n = n)
+    else: 
+        arc = arc_points(c_point, T1, T2, r, n = n)
+
 
     result = np.empty((n, 2))
-    # angle offset
-    corr_ang = rot / 2 * np.pi + ang_0
-    # calculate the points of the corner
+
     for i in range(n):
-        result[i][0] = np.cos(beta2 / n * i + corr_ang) * r + c_point[0]
-        result[i][1] = np.sin(beta2 / n * i + corr_ang) * r + c_point[1]
+        result[i][0] = arc[i][0]
+        result[i][1] = arc[i][1]
     # look if the points are in the right order
     if a[0] * b[1] - a[1] * b[0] > 0:
         result = result[::-1]

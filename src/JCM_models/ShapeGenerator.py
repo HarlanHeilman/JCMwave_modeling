@@ -1,7 +1,7 @@
 import math
 import matplotlib.pyplot as plt
 from scipy.interpolate import BSpline
-from .utils import corner_round
+from .utils import corner_round, point_in_poly, inside_y_range
 import numpy as np
 
 class ShapeGenerator:
@@ -13,6 +13,7 @@ class ShapeGenerator:
     - Trapezoid
     - Stacked trapezoids
     - B-splines
+    - polygon from JCMwave
 
     Features:
     • Flexible parameter dictionary per shape
@@ -27,6 +28,7 @@ class ShapeGenerator:
     - Trapezoid: height, width, side_angle_deg
     - Stacked trapezoids: height (list), width (list of len+1)
     - B-splines: control_points, num_points
+    - Polygon: points
 
     Example:
         sg = ShapeGenerator('rectangle', {'height': 10, 'width': 20})
@@ -45,7 +47,8 @@ class ShapeGenerator:
             'rectangle': self._rectangle,
             'stack_trapezoids': self._stack_trapezoids,
             'trapezoid': self._trapezoid,
-            'bsplines': self._bsplines
+            'bsplines': self._bsplines,
+            'polygon': self._polygon
         }
         shape_func = shape_map.get(self.shape_type)
         if not shape_func:
@@ -79,17 +82,28 @@ class ShapeGenerator:
     def _apply_corner_radii(self, coords, corner_radii, n=50):
         """Applies per-corner rounding based on corner_radii dict."""
         rounded_coords = []
-        for i in range(len(coords)):
+        L = len(coords)
+
+        for i in range(L):
             if i in corner_radii:
                 r = corner_radii[i]
                 x1 = coords[i - 1]
                 x2 = coords[i]
-                x3 = coords[(i + 1) % len(coords)]
+                x3 = coords[(i + 1) % L]
+
                 arc = corner_round(x1, x2, x3, r, n)
-                rounded_coords.extend(arc)
+
+                # Remove arc points outside the original polygon
+                arc = [p for p in arc if inside_y_range(p[0], p[1], coords)]
+                if not arc:
+                    rounded_coords.append(coords[i])
+                else:
+                    rounded_coords.extend(arc)
             else:
                 rounded_coords.append(coords[i])
+
         return rounded_coords
+
 
     def _stack_trapezoids(self):
         heights = self.params.get('height')
@@ -198,14 +212,23 @@ class ShapeGenerator:
             (self.offset_x - top_w / 2, self.offset_y + h),
             (self.offset_x - bottom_w / 2, self.offset_y),
         ]
+        
+    def _polygon(self):
+        points = self.params.get('points')
+        x = np.asarray(points[::2]) + self.offset_x
+        y = np.asarray(points[1::2]) + self.offset_y
+        return list(zip(x, y))
     
 
     def plot(self, ax=None, title=None, shift_x=0, shift_y=0):
         coords = self.generate()
         x, y = zip(*coords)
+        x = np.array(x)
+        y = np.array(y)
+
         if ax is None:
             fig  = plt.figure(figsize=(6, 6))
-            plt.plot(x+shift_x, y+shift_y, marker='o', linestyle='-', color='teal')
+            plt.plot(x+shift_x, y+shift_y, marker='.', linestyle='-', color='teal')
             plt.fill(x+shift_x, y+shift_y, alpha=0.3, color='skyblue')
             plt.title(title or f"{self.shape_type.capitalize()} Shape")
             plt.axis('equal')

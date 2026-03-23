@@ -103,27 +103,32 @@ class Shape:
         points = np.asarray(self.points).reshape(-1, 2)
         points[:, 0] += shift_x
         points[:, 1] += shift_y
+
+        # Allow user override of facecolor
+        facecolor = kwargs.pop("facecolor", colors20[self.domain_id - 1])
+
         polygon = Polygon(
             points,
             closed=True,
-            facecolor=colors20[self.domain_id-1],
+            facecolor=facecolor,
             edgecolor='black',
             alpha=1,
             label=self.name,
             zorder=self.priority,
             **kwargs
         )
+
         if ax is None:
             fig, ax = plt.subplots()
             ax.set_aspect('equal')
             ax.set_title(f"Shape: {self.name}")
             ax.legend()
-            
             ax.add_patch(polygon)
             return fig
         else:
             ax.add_patch(polygon)
             return ax
+
         
     def to_dict(self):
         return {
