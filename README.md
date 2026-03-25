@@ -53,6 +53,7 @@ Generate a Shape class:
     • A list of 2D points (flattened [x0, y0, x1, y1, ...])
     • A complex refractive index (nk)
     • Boundary conditions per edge (default: ['Transparent','Periodic','Transparent','Periodic'])
+    • Gradient dic, if gradient is present
 
     Automatically computes:
     • Permittivity (ε) as nk²
@@ -72,6 +73,73 @@ Generate a Shape class:
         )
         shape.plot()
         print(shape.describe())
+
+### Gradient
+The Gradient is calculated like this:
+    def build_surface_gradient(points, n_surface, n_bulk, max_depth, exponent=1.0):
+        """
+        Create a gradient refractive-index function that transitions from the
+        polygon boundary inward.
+
+        Parameters
+        ----------
+        points : array-like
+            Flattened polygon coordinates [x0, y0, x1, y1, ...].
+        n_surface : complex
+            Refractive index at the boundary.
+        n_bulk : complex
+            Refractive index deep inside the material.
+        max_depth : float
+            Depth over which the transition occurs.
+        exponent : float
+            Controls steepness (1 = linear, 2 = quadratic, etc.)
+
+        Returns
+        -------
+        gradient_fn : function
+            A function f(x, y) → complex refractive index.
+        """
+
+        pts = np.asarray(points).reshape(-1, 2)
+
+        def point_to_segment_distance(px, py, x1, y1, x2, y2):
+            """Distance from point (px,py) to segment (x1,y1)-(x2,y2)."""
+            vx, vy = x2 - x1, y2 - y1
+            wx, wy = px - x1, py - y1
+
+            seg_len2 = vx*vx + vy*vy
+            if seg_len2 == 0:
+                return np.hypot(px - x1, py - y1)
+
+            t = (wx*vx + wy*vy) / seg_len2
+            t = np.clip(t, 0.0, 1.0)
+
+            proj_x = x1 + t * vx
+            proj_y = y1 + t * vy
+
+            return np.hypot(px - proj_x, py - proj_y)
+
+        def min_distance_to_polygon(px, py):
+            """Minimum distance from point to polygon boundary."""
+            dists = []
+            for i in range(len(pts)):
+                x1, y1 = pts[i]
+                x2, y2 = pts[(i + 1) % len(pts)]
+                d = point_to_segment_distance(px, py, x1, y1, x2, y2)
+                dists.append(d)
+            return min(dists)
+
+        def gradient_fn(x, y):
+            """Return nk(x,y) with a smooth inward gradient."""
+            d = min_distance_to_polygon(x, y)
+
+            if d >= max_depth:
+                return n_bulk
+
+            t = (d / max_depth) ** exponent
+            return n_bulk + (n_surface - n_bulk) * (1 - t)
+
+        return gradient_fn
 
 ## Source Class
 Source: A physically grounded illumination object for optical simulation.
