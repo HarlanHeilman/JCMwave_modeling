@@ -76,6 +76,7 @@ Generate a Shape class:
 
 ### Gradient
 The Gradient is calculated like this:
+
     def build_surface_gradient(points, n_surface, n_bulk, max_depth, exponent=1.0):
         """
         Create a gradient refractive-index function that transitions from the
