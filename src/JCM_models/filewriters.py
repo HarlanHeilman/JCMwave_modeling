@@ -105,23 +105,14 @@ for i, shape in enumerate(keys['shape']):
     # --- materials.jcm ---
     materials_content = """
 <?
-
 for shape in keys['shape']:
     if shape.name == 'ComputationalDomain':
-      keys['permittivity_'] = shape.permittivity
+      keys['material_'] = shape.to_jcm()
     else:
-      keys['permittivity_'] = shape.permittivity[keys['energy_index']]
-    keys['RelPermeability_'] = 1 #keys['RelPermeability'][n]
-    keys['name_'] = shape.name
-    keys['id_'] = shape.domain_id
-    
+      keys['material_'] = shape.to_jcm(energy_index=keys['energy_index'])
 
     ?>
-    Material {
-      Name = "%(name_)s"
-      Id = %(id_)i
-      RelPermittivity = %(permittivity_)e
-      RelPermeability = %(RelPermeability_)e
-}"""
+    %(material_)s
+    """
     write_file(folder_name, "materials.jcmt", materials_content)
 

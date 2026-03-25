@@ -42,6 +42,7 @@ class Shape:
     • A list of 2D points (flattened [x0, y0, x1, y1, ...])
     • A complex refractive index (nk)
     • Boundary conditions per edge (default: ['Transparent','Periodic','Transparent','Periodic'])
+    • Gradient dic, if gradient is present
 
     Automatically computes:
     • Permittivity (ε) as nk²
@@ -63,7 +64,7 @@ class Shape:
         print(shape.describe())
     """
 
-    def __init__(self, name, domain_id, priority, side_length_constraint, points,nk,boundary = ['Transparent','Periodic','Transparent','Periodic']):
+    def __init__(self, name, domain_id, priority, side_length_constraint, points,nk,boundary = ['Transparent','Periodic','Transparent','Periodic'],gradient_dict=None):
         self.name = name
         self.domain_id = domain_id
         self.priority = priority
@@ -71,6 +72,7 @@ class Shape:
         self.points = np.array([float(p) for p in points])
         self.nk = nk
         self.boundary = boundary
+        self.gradient_dict = gradient_dict
 
         self.permittivity = np.square(self.nk)
 
@@ -141,6 +143,118 @@ class Shape:
             'boundary': self.boundary,
             'permittivity': str(self.permittivity)
         }
+        
+    def _to_jcm_constant(self, energy_index):
+        if self.name == "ComputationalDomain":
+            perm = self.permittivity
+        else:
+            if isinstance(self.permittivity, (list, np.ndarray)):
+                if energy_index is None:
+                    raise ValueError("energy_index required for energy-dependent nk.")
+                perm = self.permittivity[energy_index]
+            else:
+                perm = self.permittivity
+
+        perm_str = f"{perm:.6e}"
+
+        return f"""
+    Material {{
+    Name = "{self.name}"
+    Id = {self.domain_id}
+    RelPermittivity = {perm_str}
+    RelPermeability = 1.0
+    }}
+    """.strip()
+    
+    def _to_jcm_gradient(self, python_expression):
+        """
+        Generate a JCMwave Material block with a gradient permittivity defined by a Python expression.
+        Define python_expression as a string that can use variables like x, y, z to represent spatial coordinates.
+        """
+
+
+        return f"""
+    Material {{
+    Name = "{self.name}"
+    Id = {self.domain_id}
+    RelPermeability = 1.0
+    RelPermittivity {{
+        Python {{
+        Expression = "
+        {python_expression}
+        "
+        }}
+    
+    }}
+    }}
+    """.strip()
+    
+    def _make_gradient_text(self, energy_index, max_depth=3,exponent=1,permittivity_surface=1,uol=1e-9):
+        clean_list = [float(v)*uol for v in self.points]
+        max_depth = max_depth*uol
+        text = f"""
+\n
+empty = 0;
+def point_to_segment_distance(px, py, x1, y1, x2, y2):
+\tvx, vy = x2 - x1, y2 - y1
+\twx, wy = px - x1, py - y1
+
+\tseg_len2 = vx*vx + vy*vy
+\tif seg_len2 == 0:
+\t\treturn hypot(px - x1, py - y1)
+
+\tt = (wx*vx + wy*vy) / seg_len2
+\tt = clip(t, 0.0, 1.0)
+
+\tproj_x = x1 + t * vx
+\tproj_y = y1 + t * vy
+
+\treturn hypot(px - proj_x, py - proj_y)
+pts = asarray({clean_list}).reshape(-1, 2)
+dists = []
+for i in range(len(pts)):
+\tx1, y1 = pts[i]
+\tx2, y2 = pts[(i + 1) % len(pts)]
+\td = point_to_segment_distance(X[0], X[1], x1, y1, x2, y2)
+\tdists.append(d)
+d = min(dists)
+
+if d >= {max_depth}:
+\ttemp = {self.permittivity[energy_index]}
+else:
+\tt = (d / {max_depth}) ** {exponent}
+\ttemp = {self.permittivity[energy_index]} + ({permittivity_surface} - {self.permittivity[energy_index]}) * (1 - t)
+value = temp
+value = value*eye(3,3)
+        """
+        return text.strip()
+        
+    def to_jcm(self, energy_index=None):
+        """
+        Export this shape as a JCMwave Material{} block.
+
+        Parameters
+        ----------
+        energy_index : int or None
+            Used for energy-dependent nk.
+        python_expression : str or None
+            Define python_expression as a string
+        """
+        if self.gradient_dict is None:
+            return self._to_jcm_constant(energy_index)
+        else:
+            max_depth = self.gradient_dict.get("max_depth", 3)
+            exponent = self.gradient_dict.get("exponent", 1)
+            permittivity_surface = self.gradient_dict.get("permittivity_surface", 1)
+            if isinstance(permittivity_surface, (list, tuple, np.ndarray)):
+                permittivity_surface = permittivity_surface[energy_index]
+            
+            python_expression = self._make_gradient_text(energy_index, 
+                                                         max_depth=max_depth, 
+                                                         exponent=exponent, 
+                                                         permittivity_surface=permittivity_surface)
+            return self._to_jcm_gradient(python_expression)
+
 
 
     def save(self, filename=None):

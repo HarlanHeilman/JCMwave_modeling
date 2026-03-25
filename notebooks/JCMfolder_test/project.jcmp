@@ -19,20 +19,12 @@ Project = {
   ExportFields {
     FieldBagPath = "project_results/fieldbag.jcm"
     OutputFileName = "project_results/fieldbag_near_field_xy.jcm"
-    OutputQuantity = "ElectricFieldStrength"
+    OutputQuantity = "RelPermittivity"
+    DomainIds = [5]
     Cartesian {
       NGridPointsX = 100
       NGridPointsY = 100
     }
-  }
-}
-    
-
-    PostProcess {
-  FourierTransform {
-    FieldBagPath = "project_results/fieldbag.jcm"
-    OutputFileName = "project_results/ft.jcm"
-    NormalDirection = Y
   }
 }
     
