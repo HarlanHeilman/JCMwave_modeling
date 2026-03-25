@@ -245,6 +245,7 @@ value = value*eye(3,3)
         else:
             max_depth = self.gradient_dict.get("max_depth", 3)
             exponent = self.gradient_dict.get("exponent", 1)
+            uol = self.gradient_dict.get("uol", 1e-9)
             permittivity_surface = self.gradient_dict.get("permittivity_surface", 1)
             if isinstance(permittivity_surface, (list, tuple, np.ndarray)):
                 permittivity_surface = permittivity_surface[energy_index]
@@ -252,7 +253,8 @@ value = value*eye(3,3)
             python_expression = self._make_gradient_text(energy_index, 
                                                          max_depth=max_depth, 
                                                          exponent=exponent, 
-                                                         permittivity_surface=permittivity_surface)
+                                                         permittivity_surface=permittivity_surface,
+                                                         uol=uol)
             return self._to_jcm_gradient(python_expression)
 
 
