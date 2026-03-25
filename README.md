@@ -2,11 +2,11 @@
 This is a python wrapper for JCMsuite to more easly set up and start JCM calculations.
 You can find a helpful notebook (start.ipynb) in the notebooks folder.
 You need to generate a dictonary (for example keys) to run JCMsuite.
-keys = {'uol1': 1e-9,
-        'fem_deg': 4,}
-keys['shape'] = shape
-keys['source'] = [s_eV]
-keys['postprocess']=[pp1,pp2]
+    keys = {'uol1': 1e-9,
+            'fem_deg': 4,}
+    keys['shape'] = shape
+    keys['source'] = [s_eV]
+    keys['postprocess']=[pp1,pp2]
 You can generate the JCMfoler by running "write_project_files("JCMfolder_test")" in python.
 
 
@@ -123,33 +123,33 @@ Cartesian grid definition for field export.
 SimulationResult: container for JCMwave postprocess outputs.
 Works with the output of JCMsuite
 
-all_dfs = []
+    all_dfs = []
 
-# Suppose you have a list of SimulationResult objects
-sim_results = SimulationResult.from_list(results)  
+    # Suppose you have a list of SimulationResult objects
+    sim_results = SimulationResult.from_list(results)  
 
-for i, res in enumerate(sim_results):
-    print(res.summary())
-    print("-" * 40)
+    for i, res in enumerate(sim_results):
+        print(res.summary())
+        print("-" * 40)
 
-    # Plot first field export
-    #fd = res.field_data[0]
-    #fd.plot_field(index=0, log=True, cmap="plasma")
+        # Plot first field export
+        #fd = res.field_data[0]
+        #fd.plot_field(index=0, log=True, cmap="plasma")
 
-    # Fourier analysis
-    fo = res.fourier[0].compute_order_intensities(orders_uni=[-1, 0, 1])
-    #print("Orders:", fo["orders"])
-    #print("Raw intensities:", fo["raw"])
-    #print("Corrected intensities:", fo["corrected"])
+        # Fourier analysis
+        fo = res.fourier[0].compute_order_intensities(orders_uni=[-1, 0, 1])
+        #print("Orders:", fo["orders"])
+        #print("Raw intensities:", fo["raw"])
+        #print("Corrected intensities:", fo["corrected"])
 
-    # Get DataFrame
-    df = res.fourier[0].to_dataframe()
+        # Get DataFrame
+        df = res.fourier[0].to_dataframe()
 
-    # Add theta column from your external keys array
-    df["theta"] = keys["Theta_unique"][i]
+        # Add theta column from your external keys array
+        df["theta"] = keys["Theta_unique"][i]
 
-    # Collect
-    all_dfs.append(df)
+        # Collect
+        all_dfs.append(df)
 
-# Concatenate into one big DataFrame
-df_all = pd.concat(all_dfs, ignore_index=True)
+    # Concatenate into one big DataFrame
+    df_all = pd.concat(all_dfs, ignore_index=True)
