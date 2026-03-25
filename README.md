@@ -2,11 +2,13 @@
 This is a python wrapper for JCMsuite to more easly set up and start JCM calculations.
 You can find a helpful notebook (start.ipynb) in the notebooks folder.
 You need to generate a dictonary (for example keys) to run JCMsuite.
+
     keys = {'uol1': 1e-9,
             'fem_deg': 4,}
     keys['shape'] = shape
     keys['source'] = [s_eV]
     keys['postprocess']=[pp1,pp2]
+    
 You can generate the JCMfoler by running "write_project_files("JCMfolder_test")" in python.
 
 
