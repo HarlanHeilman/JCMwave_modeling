@@ -102,7 +102,7 @@ class Shape:
             return ax
         
     def plot_colored_geometry(self, ax=None, shift_x=0, shift_y=0, **kwargs):
-        points = np.asarray(self.points).reshape(-1, 2)
+        points = np.asarray(self.points, copy=True).reshape(-1, 2)
         points[:, 0] += shift_x
         points[:, 1] += shift_y
 
