@@ -7,6 +7,17 @@ import math
 # Precompute hc in nm·eV
 hc = const.h * const.c / const.e * 1e9  # Planck × speed of light / charge × 1e9
 
+def make_json_safe(obj):
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, np.generic):
+        return obj.item()
+    if isinstance(obj, dict):
+        return {k: make_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [make_json_safe(v) for v in obj]
+    return obj
+
 def eVnm_converter(value):
     """Convert photon energy in eV to wavelength in nm."""
     return hc / value

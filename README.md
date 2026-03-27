@@ -33,8 +33,8 @@ ShapeGenerator: A modular geometry engine for parametric shape creation.
     Shape-specific parameters:
     - Rectangle: height, width
     - Trapezoid: height, width, side_angle_deg
-    - Stacked trapezoids: height (list), width (list of len+1)
-    - B-splines: control_points, num_points
+    - Stacked trapezoids (stack_trapezoids): height (list), width (list of len+1)
+    - B-splines (bsplines): control_points, num_points
     - Polygon: points
 
     Example:
