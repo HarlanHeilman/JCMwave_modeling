@@ -13,3 +13,8 @@ dependencies = [
     "pint>=0.25.3",
     "scipy>=1.17.1",
 ]
+
+# hatch build system for simplicity
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
