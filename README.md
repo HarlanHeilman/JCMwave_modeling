@@ -1,5 +1,6 @@
 # JCMwave_modeling
 This is a python wrapper for JCMsuite to more easly set up and start JCM calculations.
+
 You can find a helpful notebook (start.ipynb) in the notebooks folder.
 You need to generate a dictonary (for example keys) to run JCMsuite.
 
@@ -10,6 +11,26 @@ You need to generate a dictonary (for example keys) to run JCMsuite.
     keys['postprocess']=[pp1,pp2]
     
 You can generate the JCMfoler by running "write_project_files("JCMfolder_test")" in python.
+
+## Installation 
+
+1. git clone repo
+```shell
+git clone https://github.com/kasandrle/JCMwave_modeling.git
+cd JCMwave_modeling
+```
+2. Create new environment
+```shell
+uv venv --python=3.12 # project is valid for python >= 3.12
+# for windows activate your environment using 
+.venv/Scripts/activate 
+# for linux/posix activate your environment using
+source .venv/bin/activate
+```
+3. Install project
+```shell
+uv sync # this will sync the project as editable as if you ran pip install -e . 
+```
 
 
 ## Use the ShapeGenerator to generate a shape
