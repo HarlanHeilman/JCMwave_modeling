@@ -444,6 +444,20 @@ wheels = [
 ]
 
 [[package]]
+name = "find-jcmwave"
+version = "1.0.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama" },
+    { name = "numpy" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/73/64/24cc320c7aa3d8c253ca1e5ca3506bbeaafa80fa994691e5ab3105186589/find_jcmwave-1.0.2.tar.gz", hash = "sha256:a4214910d882a5808161838fdfce82c9c3a6800e10ec1c5b62c5508f5ec71521", size = 3491, upload-time = "2024-03-26T16:14:00.025Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/51/36/aaff2979d42358e30e707a56eeaae5a7c027c230cd231441a9cdbb6c1a62/find_jcmwave-1.0.2-py3-none-any.whl", hash = "sha256:ec68bdc3c1b87e2e2ab3fc3fac2895c4e0af716a0de5b0ace50aa7e7f4c42dc5", size = 4739, upload-time = "2024-03-26T16:13:58.421Z" },
+]
+
+[[package]]
 name = "flexcache"
 version = "0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -637,6 +651,7 @@ name = "jcm-models"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "find-jcmwave" },
     { name = "jupyterlab" },
     { name = "matplotlib" },
     { name = "numpy" },
@@ -648,6 +663,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "find-jcmwave", specifier = ">=1.0.2" },
     { name = "jupyterlab", specifier = ">=4.5.6" },
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "numpy", specifier = ">=2.4.3" },
