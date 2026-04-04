@@ -1,0 +1,11 @@
+
+<?
+for shape in keys['shape']:
+    if shape.name == 'ComputationalDomain':
+      keys['material_'] = shape.to_jcm()
+    else:
+      keys['material_'] = shape.to_jcm(energy_index=keys['energy_index'])
+
+    ?>
+    %(material_)s
+    
