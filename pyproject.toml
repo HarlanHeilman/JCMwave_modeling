@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
+
 dependencies = [
     "jupyterlab>=4.5.6",
     "matplotlib>=3.10.8",
@@ -14,7 +15,12 @@ dependencies = [
     "scipy>=1.17.1",
 ]
 
-# hatch build system for simplicity
+# Optional dependency group for JCMsuite auto-detection
+[project.optional-dependencies]
+jcm = [
+    "find-jcmwave>=1.0.2",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
