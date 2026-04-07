@@ -169,7 +169,7 @@ Source: A physically grounded illumination object for optical simulation.
     Represents an incident wave defined by:
     • Wavelength (`lam`) in nm, eV, or meters
     • Polarization vector: [1, 0] → S-polarized, [0, 1] → P-polarized
-    • Angle of incidence (θ) in degrees
+    • Angle of incidence (θ) in degrees (0 deg = Normal Incidence)
     • Azimuthal angle (phi) in degrees
     • Direction of incidence: 'FromAbove' or 'FromBelow'
     • Type of source: default is 'PlaneWave'
