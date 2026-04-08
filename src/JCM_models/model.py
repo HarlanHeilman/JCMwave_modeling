@@ -1,10 +1,13 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon
-import pandas as pd
-import pickle
 import json
+import pickle
+import re
 from typing import Any, Dict, List, Optional
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from matplotlib.patches import Polygon
+
 from .utils import eVnm_converter
 
 colors20 = [
@@ -29,6 +32,24 @@ colors20 = [
     "olive",
     "cyan",
 ]
+
+_COMPLEX_RE = re.compile(
+    r"[+-]?\d*\.?\d+(?:[eE][+-]?\d+)?"  # real part
+    r"(?:\s*[+-]\s*\d*\.?\d+(?:[eE][+-]?\d+)?j)?"  # optional imaginary part
+)
+
+
+def _parse_nk(nk_raw):
+    if isinstance(nk_raw, list):
+        # e.g. ["(0.9805-0.006j)", "(0.977+0.00419j)"]
+        return [complex(s.strip("() ").replace(" ", "")) for s in nk_raw]
+    s = nk_raw.strip()
+    if s.startswith("["):
+        # numpy array repr: space-separated, possible intra-literal whitespace
+        tokens = _COMPLEX_RE.findall(s[1:-1])
+        return [complex(t.replace(" ", "")) for t in tokens if t.strip()]
+    # scalar: "1" or "(0.9+0.1j)"
+    return complex(s.strip("() ").replace(" ", ""))
 
 
 class Shape:
@@ -64,7 +85,17 @@ class Shape:
         print(shape.describe())
     """
 
-    def __init__(self, name, domain_id, priority, side_length_constraint, points,nk,boundary = ['Transparent','Periodic','Transparent','Periodic'],gradient_dict=None):
+    def __init__(
+        self,
+        name,
+        domain_id,
+        priority,
+        side_length_constraint,
+        points,
+        nk,
+        boundary=["Transparent", "Periodic", "Transparent", "Periodic"],
+        gradient_dict=None,
+    ):
         self.name = name
         self.domain_id = domain_id
         self.priority = priority
@@ -84,23 +115,24 @@ class Shape:
   Refractive Index (nk): {self.nk}
   Permittivity (ε): {self.permittivity}
 """
-    def plot(self, ax=None, shift_x=0,shift_y=0 , **kwargs):
-        x = self.points[::2]+shift_x
-        y = self.points[1::2]+shift_y
+
+    def plot(self, ax=None, shift_x=0, shift_y=0, **kwargs):
+        x = self.points[::2] + shift_x
+        y = self.points[1::2] + shift_y
         x = np.append(x, x[0])  # Close the polygon
         y = np.append(y, y[0])
         if ax is None:
             fig, ax = plt.subplots()
-            ax.set_aspect('equal')
+            ax.set_aspect("equal")
             ax.set_title(f"Shape: {self.name}")
             ax.legend()
-            
+
             ax.plot(x, y, label=self.name, **kwargs)
             return fig
         else:
             ax.plot(x, y, label=self.name, **kwargs)
             return ax
-        
+
     def plot_colored_geometry(self, ax=None, shift_x=0, shift_y=0, **kwargs):
         points = np.asarray(self.points, copy=True).reshape(-1, 2)
         points[:, 0] += shift_x
@@ -113,16 +145,16 @@ class Shape:
             points,
             closed=True,
             facecolor=facecolor,
-            edgecolor='black',
+            edgecolor="black",
             alpha=1,
             label=self.name,
             zorder=self.priority,
-            **kwargs
+            **kwargs,
         )
 
         if ax is None:
             fig, ax = plt.subplots()
-            ax.set_aspect('equal')
+            ax.set_aspect("equal")
             ax.set_title(f"Shape: {self.name}")
             ax.legend()
             ax.add_patch(polygon)
@@ -131,19 +163,20 @@ class Shape:
             ax.add_patch(polygon)
             return ax
 
-        
     def to_dict(self):
         return {
-            'name': self.name,
-            'domain_id': self.domain_id,
-            'priority': self.priority,
-            'side_length_constraint': self.side_length_constraint,
-            'points': self.points,
-            'nk': [str(n) for n in self.nk] if isinstance(self.nk, list) else str(self.nk),
-            'boundary': self.boundary,
-            'permittivity': str(self.permittivity)
+            "name": self.name,
+            "domain_id": self.domain_id,
+            "priority": self.priority,
+            "side_length_constraint": self.side_length_constraint,
+            "points": self.points,
+            "nk": [str(n) for n in self.nk]
+            if isinstance(self.nk, list)
+            else str(self.nk),
+            "boundary": self.boundary,
+            "permittivity": str(self.permittivity),
         }
-        
+
     def _to_jcm_constant(self, energy_index):
         if self.name == "ComputationalDomain":
             perm = self.permittivity
@@ -165,13 +198,12 @@ class Shape:
     RelPermeability = 1.0
     }}
     """.strip()
-    
+
     def _to_jcm_gradient(self, python_expression):
         """
         Generate a JCMwave Material block with a gradient permittivity defined by a Python expression.
         Define python_expression as a string that can use variables like x, y, z to represent spatial coordinates.
         """
-
 
         return f"""
     Material {{
@@ -184,14 +216,16 @@ class Shape:
         {python_expression}
         "
         }}
-    
+
     }}
     }}
     """.strip()
-    
-    def _make_gradient_text(self, energy_index, max_depth=3,exponent=1,permittivity_surface=1,uol=1e-9):
-        clean_list = [float(v)*uol for v in self.points]
-        max_depth = max_depth*uol
+
+    def _make_gradient_text(
+        self, energy_index, max_depth=3, exponent=1, permittivity_surface=1, uol=1e-9
+    ):
+        clean_list = [float(v) * uol for v in self.points]
+        max_depth = max_depth * uol
         text = f"""
 \n
 empty = 0;
@@ -228,7 +262,7 @@ value = temp
 value = value*eye(3,3)
         """
         return text.strip()
-        
+
     def to_jcm(self, energy_index=None):
         """
         Export this shape as a JCMwave Material{} block.
@@ -249,57 +283,51 @@ value = value*eye(3,3)
             permittivity_surface = self.gradient_dict.get("permittivity_surface", 1)
             if isinstance(permittivity_surface, (list, tuple, np.ndarray)):
                 permittivity_surface = permittivity_surface[energy_index]
-            
-            python_expression = self._make_gradient_text(energy_index, 
-                                                         max_depth=max_depth, 
-                                                         exponent=exponent, 
-                                                         permittivity_surface=permittivity_surface,
-                                                         uol=uol)
+
+            python_expression = self._make_gradient_text(
+                energy_index,
+                max_depth=max_depth,
+                exponent=exponent,
+                permittivity_surface=permittivity_surface,
+                uol=uol,
+            )
             return self._to_jcm_gradient(python_expression)
-
-
 
     def save(self, filename=None):
         """🔹 Save shape to a JSON file."""
         if filename is None:
             filename = f"{self.name}_shape.json"
-        with open(filename, 'w') as f:
+        with open(filename, "w") as f:
             json.dump(self.to_dict(), f, indent=2)
         print(f"🔸 Shape '{self.name}' saved to {filename}")
 
     @classmethod
     def from_dict(cls, data):
-        nk_raw = data['nk']
-        if isinstance(nk_raw, list):
-            nk_value = [complex(n.replace(' ', '')) for n in nk_raw]
-        elif isinstance(nk_raw, str) and nk_raw.startswith('['):
-            # Handle stringified list like "[0.9+0.1j, 1.0+0.0j]"
-            nk_value = [complex(n.strip()) for n in nk_raw.strip('[]').split(',')]
-        else:
-            nk_value = complex(nk_raw.replace(' ', ''))
+        nk_raw = data["nk"]
+        nk_value = _parse_nk(nk_raw)
 
         return cls(
-            name=data['name'],
-            domain_id=data['domain_id'],
-            priority=data['priority'],
-            side_length_constraint=data['side_length_constraint'],
-            points=data['points'],
+            name=data["name"],
+            domain_id=data["domain_id"],
+            priority=data["priority"],
+            side_length_constraint=data["side_length_constraint"],
+            points=data["points"],
             nk=nk_value,
-            boundary=data.get('boundary', ['Transparent','Periodic','Transparent','Periodic'])
+            boundary=data.get(
+                "boundary", ["Transparent", "Periodic", "Transparent", "Periodic"]
+            ),
         )
-
 
     @classmethod
     def load(cls, filename):
         """🔹 Load a Shape from a JSON file."""
-        with open(filename, 'r') as f:
+        with open(filename, "r") as f:
             data = json.load(f)
         shape = cls.from_dict(data)
         print(f"🔸 Shape '{shape.name}' loaded from {filename}")
         return shape
 
 
-        
 class Source:
     """
     🔆 Source: A physically grounded illumination object for optical simulation.
@@ -320,19 +348,29 @@ class Source:
     • to_jcm(): emits structured simulation-ready block format
     """
 
-    def __init__(self, lam, polarization, angle_of_incidence, phi, incidence='FromAbove', unit='nm', type='PlaneWave',PowerFluxScaling=None):
-        allowed = {'FromAbove', 'FromBelow'}
+    def __init__(
+        self,
+        lam,
+        polarization,
+        angle_of_incidence,
+        phi,
+        incidence="FromAbove",
+        unit="nm",
+        type="PlaneWave",
+        PowerFluxScaling=None,
+    ):
+        allowed = {"FromAbove", "FromBelow"}
         if incidence not in allowed:
             raise ValueError(f"incidence must be one of {allowed}, got '{incidence}'")
 
         if not (isinstance(polarization, list) and len(polarization) == 2):
             raise ValueError("polarization must be a list of two numbers")
 
-        if unit == 'nm':
+        if unit == "nm":
             self.lam = lam * 1e-9
-        elif unit == 'eV':
+        elif unit == "eV":
             self.lam = eVnm_converter(lam) * 1e-9
-        elif unit == 'm':
+        elif unit == "m":
             self.lam = lam
         else:
             raise ValueError(f"unit must be 'nm', 'eV', or 'm', got '{unit}'")
@@ -346,16 +384,18 @@ class Source:
 
     def polarization_label(self):
         if self.polarization == [1, 0]:
-            return 'S'
+            return "S"
         elif self.polarization == [0, 1]:
-            return 'P'
+            return "P"
         else:
-            return 'Mixed or custom'
+            return "Mixed or custom"
 
     def describe(self):
-        lines = [f"🔆 Source description:"]
+        lines = ["🔆 Source description:"]
         lines.append(f"• Wavelength (m): {self.lam}")
-        lines.append(f"• Polarization: {self.polarization} → {self.polarization_label()}-polarized")
+        lines.append(
+            f"• Polarization: {self.polarization} → {self.polarization_label()}-polarized"
+        )
         lines.append(f"• Angle of incidence (deg): {self.angle_of_incidence}°")
         lines.append(f"• Azimuthal angle (phi) (deg): {self.phi}°")
         lines.append(f"• Incidence direction: {self.incidence}")
@@ -375,18 +415,18 @@ class Source:
         ThetaPhi = [{self.angle_of_incidence}, {self.phi}]
         3DTo2D = yes
         Incidence = {self.incidence}"""
-        
+
         if self.PowerFluxScaling is not None:
             block += f"\n      PowerFluxScaling = {self.PowerFluxScaling}"
 
-        block += f"""
-        }}
-    }}
-    }}
-    }}
+        block += """
+        }
+    }
+    }
+    }
     """
         return block
-    
+
 
 class Cartesian:
     """
@@ -404,7 +444,9 @@ class Cartesian:
             raise ValueError("Specify either spacing OR NGridPoints, not both.")
 
         if spacing is None and (n_grid_points_x is None or n_grid_points_y is None):
-            raise ValueError("If spacing is not given, both NGridPointsX and NGridPointsY must be provided.")
+            raise ValueError(
+                "If spacing is not given, both NGridPointsX and NGridPointsY must be provided."
+            )
 
         self.spacing = spacing
         self.n_grid_points_x = n_grid_points_x
@@ -426,7 +468,7 @@ class Cartesian:
                     "NGridPointsY": self.n_grid_points_y,
                 }
             }
-        
+
     def to_jcm(self, indent=2):
         pad = " " * indent
         lines = [f"{pad}Cartesian {{"]
@@ -464,7 +506,7 @@ class PostProcess:
     • describe(): narrates the chosen post-process in ceremonial format
     """
 
-    def __init__(self, mode,field_bag_path,output_file_name, **kwargs):
+    def __init__(self, mode, field_bag_path, output_file_name, **kwargs):
         allowed_modes = {"ExportFields", "FourierTransform"}
         if mode not in allowed_modes:
             raise ValueError(f"mode must be one of {allowed_modes}, got '{mode}'")
@@ -477,7 +519,9 @@ class PostProcess:
             required = ["output_quantity"]
             for r in required:
                 if r not in kwargs:
-                    raise ValueError(f"Missing required parameter '{r}' for ExportFields")
+                    raise ValueError(
+                        f"Missing required parameter '{r}' for ExportFields"
+                    )
 
             self.output_quantity = kwargs["output_quantity"]
             self.domain_ids = kwargs.get("domain_ids")
@@ -489,7 +533,7 @@ class PostProcess:
             self.numerical_aperture = kwargs.get("numerical_aperture")
 
     def describe(self):
-        lines = [f"🌀 PostProcess description:"]
+        lines = ["🌀 PostProcess description:"]
         lines.append(f"• Mode: {self.mode}")
         lines.append(f"• FieldBagPath: {self.field_bag_path}")
         lines.append(f"• OutputFileName: {self.output_file_name}")
@@ -534,7 +578,7 @@ class PostProcess:
         lines.append(f"{pad}  }}")
         lines.append(f"{pad}}}")
         return "\n".join(lines)
-    
+
 
 class ComputationalCosts:
     def __init__(self, title: str, header: Dict[str, Any], **kwargs):
@@ -549,6 +593,7 @@ class ComputationalCosts:
             f"Total={self.header.get('AccumulatedTotalTime', 'N/A'):.2f}s, "
             f"Unknowns={self.data.get('Unknowns', ['?'])[0]}"
         )
+
 
 class FieldData:
     def __init__(self, field, grid, X, Y, Z, header):
@@ -593,16 +638,12 @@ class FieldData:
             created_fig = fig
 
         mesh = ax.pcolormesh(
-            self.X * scale,
-            self.Y * scale,
-            Z,
-            cmap=cmap,
-            shading="auto"
+            self.X * scale, self.Y * scale, Z, cmap=cmap, shading="auto"
         )
         cbar = plt.colorbar(mesh, ax=ax)
         cbar.set_label("log(Intensity)" if log else "Intensity")
-        ax.set_xlabel(f"X [{'nm' if scale==1e9 else 'm'}]")
-        ax.set_ylabel(f"Y [{'nm' if scale==1e9 else 'm'}]")
+        ax.set_xlabel(f"X [{'nm' if scale == 1e9 else 'm'}]")
+        ax.set_ylabel(f"Y [{'nm' if scale == 1e9 else 'm'}]")
         ax.set_title(f"Field intensity ({self.header.get('QuantityType')})")
         ax.set_aspect("equal")
 
@@ -617,17 +658,19 @@ class FieldData:
         intensity = self.intensity(index)
         values = np.log(intensity) if log else intensity
 
-        df = pd.DataFrame({
-            "X": self.X.flatten(),
-            "Y": self.Y.flatten(),
-            "Z": self.Z.flatten(),
-            "Intensity": values.flatten()
-        })
+        df = pd.DataFrame(
+            {
+                "X": self.X.flatten(),
+                "Y": self.Y.flatten(),
+                "Z": self.Z.flatten(),
+                "Intensity": values.flatten(),
+            }
+        )
         # Add header metadata as extra columns if desired
         for k, v in self.header.items():
             df[k] = v
         return df
-    
+
     def save(self, filename):
         """Save FieldData to a .npz file with header pickled."""
         np.savez_compressed(
@@ -637,7 +680,7 @@ class FieldData:
             X=self.X,
             Y=self.Y,
             Z=self.Z,
-            header=pickle.dumps(self.header)
+            header=pickle.dumps(self.header),
         )
 
     @classmethod
@@ -649,8 +692,6 @@ class FieldData:
         X, Y, Z = data["X"], data["Y"], data["Z"]
         header = pickle.loads(data["header"].item())
         return cls(field, grid, X, Y, Z, header)
-
-
 
 
 class FourierCoefficients:
@@ -704,26 +745,25 @@ class FourierCoefficients:
             "corrected": np.array(cor_out),
             "K": np.array(k_vals),
         }
-    
+
     def to_dataframe(self):
         dfs = []
 
         # Precompute constants
         eps0 = 8.85418781762039e-12
-        mu0  = 1.25663706143592e-06
+        mu0 = 1.25663706143592e-06
 
         eps = np.real(self.header["RelPermittivity"] * eps0)
-        mu  = np.real(self.header["RelPermeability"] * mu0)
+        mu = np.real(self.header["RelPermeability"] * mu0)
 
         # Determine factor depending on field type
         field_type = "ElectricFieldStrength"
         factor = 0.5 * np.sqrt(eps / mu)
 
         for key in self.data["ElectricFieldStrength"]:
-
             # --- Extract fields ---
-            E = self.data["ElectricFieldStrength"][key]      # shape (N, 3)
-            K = self.data["K"]                               # shape (N, 3)
+            E = self.data["ElectricFieldStrength"][key]  # shape (N, 3)
+            K = self.data["K"]  # shape (N, 3)
             k_in = self.header["IncomingPlaneWaveKVector"][key]
 
             Kx, Ky, Kz = K[:, 0], K[:, 1], K[:, 2]
@@ -733,18 +773,18 @@ class FourierCoefficients:
 
             # --- Intensity ---
             intensity = (
-                (amp_x.conj() * amp_x).real +
-                (amp_y.conj() * amp_y).real +
-                (amp_z.conj() * amp_z).real
+                (amp_x.conj() * amp_x).real
+                + (amp_y.conj() * amp_y).real
+                + (amp_z.conj() * amp_z).real
             )
 
             n_orders = len(K)
 
             # --- Compute power flux (your convert2powerflux logic) ---
             k_norm = np.linalg.norm(K, axis=1)  # |k|
-            nfield = np.sum(np.abs(E)**2, axis=1) / k_norm
-            kron = np.kron(np.ones((3,1)), nfield).T   # shape (N, 3)
-            power_flux_vec = factor * kron * K         # shape (N, 3)
+            nfield = np.sum(np.abs(E) ** 2, axis=1) / k_norm
+            kron = np.kron(np.ones((3, 1)), nfield).T  # shape (N, 3)
+            power_flux_vec = factor * kron * K  # shape (N, 3)
 
             # Components of power flux
             P_x = power_flux_vec[:, 0]
@@ -752,23 +792,25 @@ class FourierCoefficients:
             P_z = power_flux_vec[:, 2]
 
             # --- Build dataframe ---
-            df = pd.DataFrame({
-                "key": np.full(n_orders, key),
-                "Kx": Kx,
-                "Ky": Ky,
-                "Kz": Kz,
-                "Kx_in": np.full(n_orders, Kx_in),
-                "Ky_in": np.full(n_orders, Ky_in),
-                "Kz_in": np.full(n_orders, Kz_in),
-                "amp_x": (amp_x.conj() * amp_x).real,
-                "amp_y": (amp_y.conj() * amp_y).real,
-                "amp_z": (amp_z.conj() * amp_z).real,
-                "Intensity_calc": intensity,
-                "P_x": P_x,
-                "P_y": P_y,
-                "P_z": P_z,
-                "P_norm": P_x + P_y + P_z
-            })
+            df = pd.DataFrame(
+                {
+                    "key": np.full(n_orders, key),
+                    "Kx": Kx,
+                    "Ky": Ky,
+                    "Kz": Kz,
+                    "Kx_in": np.full(n_orders, Kx_in),
+                    "Ky_in": np.full(n_orders, Ky_in),
+                    "Kz_in": np.full(n_orders, Kz_in),
+                    "amp_x": (amp_x.conj() * amp_x).real,
+                    "amp_y": (amp_y.conj() * amp_y).real,
+                    "amp_z": (amp_z.conj() * amp_z).real,
+                    "Intensity_calc": intensity,
+                    "P_x": P_x,
+                    "P_y": P_y,
+                    "P_z": P_z,
+                    "P_norm": P_x + P_y + P_z,
+                }
+            )
 
             # Add diffraction order if available
             if "N1" in self.data and self.data["N1"] is not None:
@@ -779,7 +821,7 @@ class FourierCoefficients:
             df["cos_theta_in"] = df["Kz_in"] / df["k_norm"]
             df["cos_theta_out"] = df["Kz"] / df["k_norm"]
 
-            with np.errstate(invalid='ignore', divide='ignore'):
+            with np.errstate(invalid="ignore", divide="ignore"):
                 df["cos_phi_out"] = np.sqrt(
                     1 - np.square(np.abs(df["Kx"] - df["Kx_in"]) / df["k_norm"])
                 )
@@ -793,11 +835,10 @@ class FourierCoefficients:
             dfs.append(df)
 
         return pd.concat(dfs, ignore_index=True)
-    
 
-
-
-    def plot_intensities(self, orders_uni=(-1, 0, 1), use_k=False, corrected=True, **kwargs):
+    def plot_intensities(
+        self, orders_uni=(-1, 0, 1), use_k=False, corrected=True, **kwargs
+    ):
         """
         Plot diffraction order intensities.
 
@@ -822,7 +863,7 @@ class FourierCoefficients:
             xlabel = "Diffraction Order"
 
         fig, ax = plt.subplots(figsize=(6, 4))
-        ax.plot(x, y ,'.-', **kwargs)
+        ax.plot(x, y, ".-", **kwargs)
         ax.set_xlabel(xlabel)
         ax.set_ylabel("Intensity")
         ax.set_title(f"{self.title} ({'corrected' if corrected else 'raw'})")
@@ -835,14 +876,17 @@ class SimulationResult:
     🌀 SimulationResult: container for JCMwave postprocess outputs.
     """
 
-    def __init__(self, file: str,
-                 computational_costs: Optional[ComputationalCosts] = None,
-                 field_data: Optional[List[FieldData]] = None,
-                 fourier: Optional[List[FourierCoefficients]] = None):
+    def __init__(
+        self,
+        file: str,
+        computational_costs: Optional[ComputationalCosts] = None,
+        field_data: Optional[List[FieldData]] = None,
+        fourier: Optional[List[FourierCoefficients]] = None,
+    ):
         self.file = file
         self.computational_costs = computational_costs
-        self.field_data = field_data or []   # list of FieldData
-        self.fourier = fourier or []         # list of FourierCoefficients
+        self.field_data = field_data or []  # list of FieldData
+        self.fourier = fourier or []  # list of FourierCoefficients
 
     def summary(self) -> str:
         lines = [f"📂 SimulationResult from {self.file}"]
@@ -856,7 +900,11 @@ class SimulationResult:
 
     @classmethod
     def from_raw(cls, raw: list):
-        comp = ComputationalCosts(**raw[0]["computational_costs"]) if "computational_costs" in raw[0] else None
+        comp = (
+            ComputationalCosts(**raw[0]["computational_costs"])
+            if "computational_costs" in raw[0]
+            else None
+        )
 
         field_blocks = []
         fourier_blocks = []
@@ -864,31 +912,33 @@ class SimulationResult:
         # loop through all blocks after the first
         for block in raw[1:]:
             if "field" in block:  # FieldData block
-                field_blocks.append(FieldData(
-                    field=block["field"],
-                    grid=block["grid"],
-                    X=block["X"],
-                    Y=block["Y"],
-                    Z=block["Z"],
-                    header=block["header"]
-                ))
+                field_blocks.append(
+                    FieldData(
+                        field=block["field"],
+                        grid=block["grid"],
+                        X=block["X"],
+                        Y=block["Y"],
+                        Z=block["Z"],
+                        header=block["header"],
+                    )
+                )
             elif "title" in block and "ElectricFieldStrength" in block:
-                fourier_blocks.append(FourierCoefficients(
-                    title=block["title"],
-                    header=block["header"],
-                    K=block["K"],
-                    ElectricFieldStrength=block["ElectricFieldStrength"],
-                    **{k: block[k] for k in ("N1", "N2") if k in block}
-                ))
-
+                fourier_blocks.append(
+                    FourierCoefficients(
+                        title=block["title"],
+                        header=block["header"],
+                        K=block["K"],
+                        ElectricFieldStrength=block["ElectricFieldStrength"],
+                        **{k: block[k] for k in ("N1", "N2") if k in block},
+                    )
+                )
 
         return cls(
             file=raw[0].get("file", "unknown"),
             computational_costs=comp,
             field_data=field_blocks,
-            fourier=fourier_blocks
+            fourier=fourier_blocks,
         )
-
 
     @classmethod
     def from_list(cls, raws: list):
