@@ -10,14 +10,21 @@
     Material {
     Name = "substrate"
     Id = 2
-    RelPermittivity = 1.010319e+00+3.217420e-02j
+    RelPermittivity = 1.010319e+00+3.217098e-02j
     RelPermeability = 1.0
     }
     
     Material {
     Name = "substrate_oxide"
     Id = 3
-    RelPermittivity = 9.756082e-01+2.336266e-02j
+    RelPermittivity = 9.756076e-01+2.336149e-02j
+    RelPermeability = 1.0
+    }
+    
+    Material {
+    Name = "UL"
+    Id = 4
+    RelPermittivity = 9.545114e-01+8.187260e-03j
     RelPermeability = 1.0
     }
     
@@ -57,7 +64,7 @@ if d >= 3.0000000000000004e-09:
 	temp = (0.9545114439+0.00818726j)
 else:
 	t = (d / 3.0000000000000004e-09) ** 2
-	temp = (0.9545114439+0.00818726j) + ((0.975608150233726+0.023362660267273332j) - (0.9545114439+0.00818726j)) * (1 - t)
+	temp = (0.9545114439+0.00818726j) + ((0.9756076422273461+0.02336149060914163j) - (0.9545114439+0.00818726j)) * (1 - t)
 value = temp
 value = value*eye(3,3)
         "

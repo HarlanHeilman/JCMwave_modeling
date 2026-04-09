@@ -19,8 +19,7 @@ Project = {
   ExportFields {
     FieldBagPath = "project_results/fieldbag.jcm"
     OutputFileName = "project_results/fieldbag_near_field_xy.jcm"
-    OutputQuantity = "RelPermittivity"
-    DomainIds = [5]
+    OutputQuantity = "ElectricFieldStrength"
     Cartesian {
       NGridPointsX = 100
       NGridPointsY = 100
